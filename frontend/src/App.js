@@ -3,6 +3,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
+import BooksList from './components/books/BooksList';
+import MembersList from './components/members/MembersList';
+import Navbar from './components/layout/Navbar';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import './App.css';
@@ -50,6 +53,8 @@ function App() {
   return (
     <Router>
       <div className="App">
+        {isAuthenticated && <Navbar user={user} onLogout={handleLogout} />}
+        
         <Routes>
           <Route 
             path="/login" 
@@ -71,11 +76,28 @@ function App() {
             path="/dashboard" 
             element={
               isAuthenticated ? 
-                <Dashboard user={user} onLogout={handleLogout} /> : 
+                <Dashboard user={user} /> : 
+                <Navigate to="/login" />
+            } 
+          />
+          <Route 
+            path="/books" 
+            element={
+              isAuthenticated ? 
+                <BooksList /> : 
+                <Navigate to="/login" />
+            } 
+          />
+          <Route 
+            path="/members" 
+            element={
+              isAuthenticated ? 
+                <MembersList /> : 
                 <Navigate to="/login" />
             } 
           />
           <Route path="/" element={<Navigate to="/login" />} />
+          <Route path="*" element={<Navigate to="/dashboard" />} />
         </Routes>
       </div>
     </Router>

@@ -1,18 +1,20 @@
 package utils;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.testng.ITestContext;
 import org.testng.ITestListener;
 import org.testng.ITestResult;
 
+
 public class TestListener implements ITestListener {
-    private final TestExecutionTableFormatter tableFormatter = new TestExecutionTableFormatter();
+    private TestExecutionTableFormatter tableFormatter;
     private int testCounter = 0;
 
     @Override
     public void onStart(ITestContext context) {
         testCounter = 0;
-        //tableFormatter = new TestExecutionTableFormatter();
-        //logger.info("Test Execution Started");
+        tableFormatter = new TestExecutionTableFormatter();
     }
 
     @Override
@@ -40,7 +42,7 @@ public class TestListener implements ITestListener {
 
     @Override
     public void onFinish(ITestContext context) {
-        //System.out.println("\n\n" + tableFormatter.getFormattedTable() + "\n");
+        // No action
     }
 
     private void addTestRowToTable(ITestResult result, String status) {

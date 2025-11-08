@@ -1,13 +1,19 @@
 const express = require('express');
-const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 require('dotenv').config();
+
+const pool = require('./config/database');
+
+// Import routes
+const authRoutes = require('./routes/auth');
+const booksRoutes = require('./routes/books');
+const membersRoutes = require('./routes/members');
+const dashboardRoutes = require('./routes/dashboard');
 
 const app = express();
 const PORT = process.env.PORT || 5002;
 
-// Simple CORS
+// CORS Middleware
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -21,21 +27,13 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'library_db',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
-
+// Database initialization
 async function initializeDatabase() {
   try {
     const connection = await pool.getConnection();
     console.log('✓ Connected to MySQL database');
 
+    // Create users table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -48,7 +46,55 @@ async function initializeDatabase() {
     `);
     console.log('✓ Users table ready');
 
-    const [users] = await connection.query('SELECT * FROM users WHERE email = ?', ['admin@library.com']);
+    // Create books table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS books (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        author VARCHAR(255) NOT NULL,
+        isbn VARCHAR(20) UNIQUE,
+        category VARCHAR(100),
+        total_copies INT DEFAULT 1,
+        available_copies INT DEFAULT 1,
+        publication_year INT,
+        publisher VARCHAR(200),
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_title (title),
+        INDEX idx_author (author),
+        INDEX idx_category (category)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    console.log('✓ Books table ready');
+
+    // Create members table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS members (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        member_id VARCHAR(50) UNIQUE NOT NULL,
+        name VARCHAR(200) NOT NULL,
+        email VARCHAR(100) UNIQUE NOT NULL,
+        phone VARCHAR(20),
+        address TEXT,
+        membership_type ENUM('standard', 'premium', 'student') DEFAULT 'standard',
+        membership_start DATE NOT NULL,
+        membership_end DATE NOT NULL,
+        status ENUM('active', 'inactive', 'suspended') DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_member_id (member_id),
+        INDEX idx_email (email),
+        INDEX idx_status (status)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    console.log('✓ Members table ready');
+
+    // Create default admin user
+    const [users] = await connection.query(
+      'SELECT * FROM users WHERE email = ?', 
+      ['admin@library.com']
+    );
     
     if (users.length === 0) {
       const hashedPassword = await bcrypt.hash('admin123', 10);
@@ -57,146 +103,178 @@ async function initializeDatabase() {
         ['Admin User', 'admin@library.com', hashedPassword, 'admin']
       );
       console.log('✓ Default admin user created');
+      console.log('  Email: admin@library.com');
+      console.log('  Password: admin123');
+    }
+
+    // Seed sample data if tables are empty
+    const [bookCount] = await connection.query('SELECT COUNT(*) as count FROM books');
+    if (bookCount[0].count === 0) {
+      await seedSampleBooks(connection);
+    }
+
+    const [memberCount] = await connection.query('SELECT COUNT(*) as count FROM members');
+    if (memberCount[0].count === 0) {
+      await seedSampleMembers(connection);
     }
 
     connection.release();
   } catch (error) {
-    console.error('Database error:', error.message);
+    console.error('Database initialization error:', error.message);
     process.exit(1);
   }
 }
 
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'Access token required' });
-  }
-
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid or expired token' });
+// Seed sample books
+async function seedSampleBooks(connection) {
+  const sampleBooks = [
+    {
+      title: 'The Great Gatsby',
+      author: 'F. Scott Fitzgerald',
+      isbn: '978-0-7432-7356-5',
+      category: 'Fiction',
+      total_copies: 5,
+      available_copies: 5,
+      publication_year: 1925,
+      publisher: 'Scribner',
+      description: 'A classic American novel set in the Jazz Age'
+    },
+    {
+      title: 'To Kill a Mockingbird',
+      author: 'Harper Lee',
+      isbn: '978-0-06-112008-4',
+      category: 'Fiction',
+      total_copies: 4,
+      available_copies: 4,
+      publication_year: 1960,
+      publisher: 'J.B. Lippincott & Co.',
+      description: 'A gripping tale of racial injustice and childhood innocence'
+    },
+    {
+      title: '1984',
+      author: 'George Orwell',
+      isbn: '978-0-452-28423-4',
+      category: 'Science Fiction',
+      total_copies: 6,
+      available_copies: 6,
+      publication_year: 1949,
+      publisher: 'Secker & Warburg',
+      description: 'A dystopian social science fiction novel'
     }
-    req.user = user;
-    next();
-  });
+  ];
+
+  for (const book of sampleBooks) {
+    await connection.query(
+      `INSERT INTO books (title, author, isbn, category, total_copies, available_copies, 
+       publication_year, publisher, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        book.title, book.author, book.isbn, book.category, 
+        book.total_copies, book.available_copies, book.publication_year, 
+        book.publisher, book.description
+      ]
+    );
+  }
+  console.log('✓ Sample books added');
 }
 
+// Seed sample members
+async function seedSampleMembers(connection) {
+  const today = new Date();
+  const oneYearLater = new Date(today);
+  oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+
+  const sampleMembers = [
+    {
+      member_id: 'MEM2025001',
+      name: 'John Doe',
+      email: 'john.doe@example.com',
+      phone: '+1234567890',
+      address: '123 Main Street, City, State',
+      membership_type: 'standard',
+      membership_start: today.toISOString().split('T')[0],
+      membership_end: oneYearLater.toISOString().split('T')[0],
+      status: 'active'
+    },
+    {
+      member_id: 'MEM2025002',
+      name: 'Jane Smith',
+      email: 'jane.smith@example.com',
+      phone: '+1234567891',
+      address: '456 Oak Avenue, City, State',
+      membership_type: 'premium',
+      membership_start: today.toISOString().split('T')[0],
+      membership_end: oneYearLater.toISOString().split('T')[0],
+      status: 'active'
+    }
+  ];
+
+  for (const member of sampleMembers) {
+    await connection.query(
+      `INSERT INTO members (member_id, name, email, phone, address, membership_type, 
+       membership_start, membership_end, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        member.member_id, member.name, member.email, member.phone, 
+        member.address, member.membership_type, member.membership_start, 
+        member.membership_end, member.status
+      ]
+    );
+  }
+  console.log('✓ Sample members added');
+}
+
+// Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Server running' });
+  res.json({ 
+    status: 'ok', 
+    message: 'Server running',
+    version: '2.0.0',
+    timestamp: new Date().toISOString()
+  });
 });
 
-app.post('/api/auth/register', async (req, res) => {
-  let connection;
-  try {
-    const { username, email, password } = req.body;
+// Mount routes
+app.use('/api/auth', authRoutes);
+app.use('/api/books', booksRoutes);
+app.use('/api/members', membersRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
-    if (!username || !email || !password) {
-      return res.status(400).json({ error: 'All fields required' });
-    }
-
-    connection = await pool.getConnection();
-    const [existing] = await connection.query('SELECT id FROM users WHERE email = ?', [email]);
-
-    if (existing.length > 0) {
-      connection.release();
-      return res.status(400).json({ error: 'Email already registered' });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const [result] = await connection.query(
-      'INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)',
-      [username, email, hashedPassword, 'user']
-    );
-
-    const token = jwt.sign(
-      { id: result.insertId, email, username, role: 'user' },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
-    connection.release();
-    res.status(201).json({ message: 'Registered', user: { id: result.insertId, username, email, role: 'user' }, token });
-  } catch (error) {
-    console.error('Register error:', error);
-    if (connection) connection.release();
-    res.status(500).json({ error: 'Server error' });
-  }
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'Endpoint not found' });
 });
 
-app.post('/api/auth/login', async (req, res) => {
-  let connection;
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password required' });
-    }
-
-    connection = await pool.getConnection();
-    const [users] = await connection.query(
-      'SELECT id, username, email, password_hash, role FROM users WHERE email = ?',
-      [email]
-    );
-
-    if (users.length === 0) {
-      connection.release();
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    const user = users[0];
-    const isValid = await bcrypt.compare(password, user.password_hash);
-
-    if (!isValid) {
-      connection.release();
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    const token = jwt.sign(
-      { id: user.id, email: user.email, username: user.username, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
-    connection.release();
-    res.json({ message: 'Login successful', user: { id: user.id, username: user.username, email: user.email, role: user.role }, token });
-  } catch (error) {
-    console.error('Login error:', error);
-    if (connection) connection.release();
-    res.status(500).json({ error: 'Server error' });
-  }
+// Error handler
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
-app.get('/api/auth/me', authenticateToken, async (req, res) => {
-  let connection;
-  try {
-    connection = await pool.getConnection();
-    const [users] = await connection.query('SELECT id, username, email, role FROM users WHERE id = ?', [req.user.id]);
-    connection.release();
-    if (users.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    res.json({ user: users[0] });
-  } catch (error) {
-    if (connection) connection.release();
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-app.get('/api/dashboard/stats', authenticateToken, (req, res) => {
-  res.json({ totalBooks: 150, totalMembers: 45, booksIssued: 23, overdueBooks: 5 });
-});
-
-app.get('/api/dashboard/activity', authenticateToken, (req, res) => {
-  res.json({ activities: [
-    { id: 1, date: '2025-11-03', activity: 'Book Issued', user: 'Admin' },
-    { id: 2, date: '2025-11-03', activity: 'Member Added', user: 'Admin' }
-  ]});
-});
-
+// Start server
 app.listen(PORT, async () => {
+  console.log('\n=================================');
+  console.log('📚 Library Management System API');
+  console.log('=================================\n');
+  
   await initializeDatabase();
-  console.log(`Server running on port ${PORT}`);
-  console.log(`API: http://localhost:${PORT}/api`);
+  
+  console.log(`\n✓ Server running on port ${PORT}`);
+  console.log(`✓ API Base URL: http://localhost:${PORT}/api`);
+  console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}\n`);
+  console.log('Available Endpoints:');
+  console.log('  POST   /api/auth/register');
+  console.log('  POST   /api/auth/login');
+  console.log('  GET    /api/auth/me');
+  console.log('  GET    /api/dashboard/stats');
+  console.log('  GET    /api/dashboard/activity');
+  console.log('  GET    /api/books');
+  console.log('  POST   /api/books');
+  console.log('  GET    /api/books/:id');
+  console.log('  PUT    /api/books/:id');
+  console.log('  DELETE /api/books/:id');
+  console.log('  GET    /api/members');
+  console.log('  POST   /api/members');
+  console.log('  GET    /api/members/:id');
+  console.log('  PUT    /api/members/:id');
+  console.log('  DELETE /api/members/:id');
+  console.log('\n=================================\n');
 });

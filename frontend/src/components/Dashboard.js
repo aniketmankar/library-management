@@ -4,9 +4,9 @@ import axios from 'axios';
 import { Container, Row, Col, Card, Button, Navbar, Nav, Table, Alert, Spinner } from 'react-bootstrap';
 import './Dashboard.css';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5002/api';
 
-function Dashboard({ user, onLogout }) {
+function Dashboard({ user, onLogout, onNavigate }) {
   const [stats, setStats] = useState({
     totalBooks: 0,
     totalMembers: 0,
@@ -50,7 +50,13 @@ function Dashboard({ user, onLogout }) {
   };
 
   const handleQuickAction = (action) => {
-    alert(`${action} - Coming in Phase 2!`);
+    if (action === 'Add Book') {
+      onNavigate('books');
+    } else if (action === 'Add Member') {
+      onNavigate('members');
+    } else {
+      alert(`${action} - Coming soon!`);
+    }
   };
 
   if (loading) {
@@ -198,10 +204,6 @@ function Dashboard({ user, onLogout }) {
                     <i className="bi bi-arrow-right-circle me-2"></i>
                     Issue Book
                   </Button>
-                </div>
-                <div className="alert alert-info mt-4 small" role="alert">
-                  <i className="bi bi-info-circle me-2"></i>
-                  These features are coming in Phase 2!
                 </div>
               </Card.Body>
             </Card>
