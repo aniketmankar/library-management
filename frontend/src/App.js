@@ -3,6 +3,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
+import Books from './components/Books';
+import Members from './components/Members';
+import MainLayout from './components/MainLayout';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import './App.css';
@@ -71,7 +74,29 @@ function App() {
             path="/dashboard" 
             element={
               isAuthenticated ? 
-                <Dashboard user={user} onLogout={handleLogout} /> : 
+                <MainLayout user={user} onLogout={handleLogout}>
+                  <Dashboard user={user} onLogout={handleLogout} />
+                </MainLayout> : 
+                <Navigate to="/login" />
+            } 
+          />
+          <Route 
+            path="/books" 
+            element={
+              isAuthenticated ? 
+                <MainLayout user={user} onLogout={handleLogout}>
+                  <Books />
+                </MainLayout> : 
+                <Navigate to="/login" />
+            } 
+          />
+          <Route 
+            path="/members" 
+            element={
+              isAuthenticated ? 
+                <MainLayout user={user} onLogout={handleLogout}>
+                  <Members />
+                </MainLayout> : 
                 <Navigate to="/login" />
             } 
           />
