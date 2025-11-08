@@ -1,5 +1,5 @@
 const pool = require('../config/database');
-const { validateBook, validateISBN } = require('../utils/validators');
+const { validateBook, validateISBN } = require('../utils/validators')
 
 // Get all books
 exports.getAllBooks = async (req, res) => {
