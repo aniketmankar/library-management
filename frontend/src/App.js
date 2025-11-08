@@ -5,6 +5,8 @@ import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 import BooksList from './components/books/BooksList';
 import MembersList from './components/members/MembersList';
+import AdminPage from './components/admin/AdminPage';
+import LibrarianPage from './components/librarian/LibrarianPage';
 import Navbar from './components/layout/Navbar';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
@@ -40,6 +42,28 @@ function App() {
     setIsAuthenticated(false);
   };
 
+  // Route protection based on roles
+  const ProtectedRoute = ({ children, allowedRoles }) => {
+    if (!isAuthenticated) {
+      return <Navigate to="/login" />;
+    }
+    
+    if (allowedRoles && !allowedRoles.includes(user?.role)) {
+      return <Navigate to="/dashboard" />;
+    }
+    
+    return children;
+  };
+
+  // Check if user has permission (for librarians)
+  const hasPermission = (permission) => {
+    if (user?.role === 'admin') return true;
+    if (user?.role === 'librarian') {
+      return user?.permissions?.includes(permission);
+    }
+    return false;
+  };
+
   if (loading) {
     return (
       <div className="d-flex justify-content-center align-items-center min-vh-100">
@@ -56,6 +80,7 @@ function App() {
         {isAuthenticated && <Navbar user={user} onLogout={handleLogout} />}
         
         <Routes>
+          {/* Public Routes */}
           <Route 
             path="/login" 
             element={
@@ -72,30 +97,65 @@ function App() {
                 <Register onRegister={handleLogin} />
             } 
           />
+
+          {/* Protected Routes - All authenticated users */}
           <Route 
             path="/dashboard" 
             element={
-              isAuthenticated ? 
-                <Dashboard user={user} /> : 
-                <Navigate to="/login" />
+              <ProtectedRoute>
+                <Dashboard user={user} />
+              </ProtectedRoute>
             } 
           />
+
+          {/* Admin Only Routes */}
+          <Route 
+            path="/admin" 
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminPage user={user} />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* Librarian Only Routes */}
+          <Route 
+            path="/librarian" 
+            element={
+              <ProtectedRoute allowedRoles={['librarian']}>
+                <LibrarianPage user={user} />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* Books Management - Admin or Librarian with manage_books permission */}
           <Route 
             path="/books" 
             element={
-              isAuthenticated ? 
-                <BooksList /> : 
-                <Navigate to="/login" />
+              <ProtectedRoute>
+                {(user?.role === 'admin' || hasPermission('manage_books')) ? (
+                  <BooksList user={user} />
+                ) : (
+                  <Navigate to="/dashboard" />
+                )}
+              </ProtectedRoute>
             } 
           />
+
+          {/* Members Management - Admin or Librarian with manage_members permission */}
           <Route 
             path="/members" 
             element={
-              isAuthenticated ? 
-                <MembersList /> : 
-                <Navigate to="/login" />
+              <ProtectedRoute>
+                {(user?.role === 'admin' || hasPermission('manage_members')) ? (
+                  <MembersList user={user} />
+                ) : (
+                  <Navigate to="/dashboard" />
+                )}
+              </ProtectedRoute>
             } 
           />
+
           <Route path="/" element={<Navigate to="/login" />} />
           <Route path="*" element={<Navigate to="/dashboard" />} />
         </Routes>

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Container, Form, Button, Alert, Card } from 'react-bootstrap';
+import { Container, Form, Button, Alert, Card, Tab, Tabs } from 'react-bootstrap';
 import './Auth.css';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5002/api';
 
 function Login({ onLogin }) {
   const [formData, setFormData] = useState({
@@ -39,6 +39,16 @@ function Login({ onLogin }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fillDemoCredentials = (role) => {
+    const credentials = {
+      admin: { email: 'admin@library.com', password: 'admin123' },
+      librarian: { email: 'librarian@library.com', password: 'librarian123' }
+    };
+    
+    setFormData(credentials[role]);
+    setError('');
   };
 
   return (
@@ -112,23 +122,59 @@ function Login({ onLogin }) {
 
               <div className="text-center mb-4">
                 <p className="mb-0">
-                  Don't have an account?{' '}
+                  Not a member?{' '}
                   <Link to="/register" className="fw-bold text-decoration-none" data-testid="register-link">
-                    Create one here
+                    Register here
                   </Link>
                 </p>
               </div>
 
               <hr className="my-4" />
               
-              <div className="alert alert-info" role="alert">
-                <h6 className="alert-heading mb-2">
-                  <i className="bi bi-info-circle me-2"></i>Demo Credentials
+              <div className="mb-3">
+                <h6 className="text-center mb-3">
+                  <i className="bi bi-info-circle me-2"></i>Demo Accounts
                 </h6>
-                <small>
-                  <strong>Email:</strong> admin@library.com<br />
-                  <strong>Password:</strong> admin123
-                </small>
+                <Tabs defaultActiveKey="admin" className="mb-3" justify>
+                  <Tab eventKey="admin" title={<><i className="bi bi-shield-lock me-1"></i> Admin</>}>
+                    <div className="alert alert-danger mb-0">
+                      <div className="d-flex justify-content-between align-items-center">
+                        <div>
+                          <small>
+                            <strong>Email:</strong> admin@library.com<br />
+                            <strong>Password:</strong> admin123
+                          </small>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant="outline-danger"
+                          onClick={() => fillDemoCredentials('admin')}
+                        >
+                          Use
+                        </Button>
+                      </div>
+                    </div>
+                  </Tab>
+                  <Tab eventKey="librarian" title={<><i className="bi bi-person-badge me-1"></i> Librarian</>}>
+                    <div className="alert alert-primary mb-0">
+                      <div className="d-flex justify-content-between align-items-center">
+                        <div>
+                          <small>
+                            <strong>Email:</strong> librarian@library.com<br />
+                            <strong>Password:</strong> librarian123
+                          </small>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant="outline-primary"
+                          onClick={() => fillDemoCredentials('librarian')}
+                        >
+                          Use
+                        </Button>
+                      </div>
+                    </div>
+                  </Tab>
+                </Tabs>
               </div>
             </Form>
           </Card.Body>

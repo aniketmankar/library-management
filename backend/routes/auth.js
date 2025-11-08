@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const pool = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
 
-// Register
+// Register - Only for library members
 router.post('/register', async (req, res) => {
   let connection;
   try {
@@ -28,21 +28,23 @@ router.post('/register', async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    
+    // Always create as 'member' role
     const [result] = await connection.query(
       'INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)',
-      [username, email, hashedPassword, 'user']
+      [username, email, hashedPassword, 'member']
     );
 
     const token = jwt.sign(
-      { id: result.insertId, email, username, role: 'user' },
+      { id: result.insertId, email, username, role: 'member' },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
     );
 
     connection.release();
     res.status(201).json({ 
-      message: 'Registered successfully', 
-      user: { id: result.insertId, username, email, role: 'user' }, 
+      message: 'Registered successfully as library member', 
+      user: { id: result.insertId, username, email, role: 'member' }, 
       token 
     });
   } catch (error) {
@@ -81,8 +83,24 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Get permissions if librarian
+    let permissions = [];
+    if (user.role === 'librarian') {
+      const [perms] = await connection.query(
+        'SELECT permission FROM librarian_permissions WHERE user_id = ?',
+        [user.id]
+      );
+      permissions = perms.map(p => p.permission);
+    }
+
     const token = jwt.sign(
-      { id: user.id, email: user.email, username: user.username, role: user.role },
+      { 
+        id: user.id, 
+        email: user.email, 
+        username: user.username, 
+        role: user.role,
+        permissions: permissions
+      },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
     );
@@ -90,7 +108,13 @@ router.post('/login', async (req, res) => {
     connection.release();
     res.json({ 
       message: 'Login successful', 
-      user: { id: user.id, username: user.username, email: user.email, role: user.role }, 
+      user: { 
+        id: user.id, 
+        username: user.username, 
+        email: user.email, 
+        role: user.role,
+        permissions: permissions
+      }, 
       token 
     });
   } catch (error) {
@@ -109,13 +133,32 @@ router.get('/me', authenticateToken, async (req, res) => {
       'SELECT id, username, email, role FROM users WHERE id = ?', 
       [req.user.id]
     );
-    connection.release();
     
     if (users.length === 0) {
+      connection.release();
       return res.status(404).json({ error: 'User not found' });
     }
+
+    const user = users[0];
+
+    // Get permissions if librarian
+    let permissions = [];
+    if (user.role === 'librarian') {
+      const [perms] = await connection.query(
+        'SELECT permission FROM librarian_permissions WHERE user_id = ?',
+        [user.id]
+      );
+      permissions = perms.map(p => p.permission);
+    }
+
+    connection.release();
     
-    res.json({ user: users[0] });
+    res.json({ 
+      user: { 
+        ...user, 
+        permissions: permissions 
+      } 
+    });
   } catch (error) {
     if (connection) connection.release();
     res.status(500).json({ error: 'Failed to fetch user' });

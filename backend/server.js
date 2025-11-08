@@ -9,6 +9,7 @@ const authRoutes = require('./routes/auth');
 const booksRoutes = require('./routes/books');
 const membersRoutes = require('./routes/members');
 const dashboardRoutes = require('./routes/dashboard');
+const librariansRoutes = require('./routes/librarians');
 
 const app = express();
 const PORT = process.env.PORT || 5002;
@@ -40,11 +41,27 @@ async function initializeDatabase() {
         username VARCHAR(100) NOT NULL,
         email VARCHAR(100) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
-        role VARCHAR(50) DEFAULT 'user',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        role ENUM('admin', 'librarian', 'member') DEFAULT 'member',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_role (role),
+        INDEX idx_email (email)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     console.log('✓ Users table ready');
+
+    // Create librarian_permissions table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS librarian_permissions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        permission VARCHAR(50) NOT NULL,
+        granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_user_permission (user_id, permission),
+        INDEX idx_user_permission (user_id, permission)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    console.log('✓ Librarian permissions table ready');
 
     // Create books table
     await connection.query(`
@@ -105,6 +122,32 @@ async function initializeDatabase() {
       console.log('✓ Default admin user created');
       console.log('  Email: admin@library.com');
       console.log('  Password: admin123');
+    }
+
+    // Create sample librarian if none exists
+    const [librarians] = await connection.query(
+      'SELECT * FROM users WHERE role = ?',
+      ['librarian']
+    );
+
+    if (librarians.length === 0) {
+      const hashedPassword = await bcrypt.hash('librarian123', 10);
+      const [libResult] = await connection.query(
+        'INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)',
+        ['Sample Librarian', 'librarian@library.com', hashedPassword, 'librarian']
+      );
+
+      // Grant all permissions to sample librarian
+      const permissions = ['manage_books', 'manage_members', 'issue_books', 'view_reports'];
+      const permissionValues = permissions.map(perm => [libResult.insertId, perm]);
+      await connection.query(
+        'INSERT INTO librarian_permissions (user_id, permission) VALUES ?',
+        [permissionValues]
+      );
+
+      console.log('✓ Sample librarian created');
+      console.log('  Email: librarian@library.com');
+      console.log('  Password: librarian123');
     }
 
     // Seed sample data if tables are empty
@@ -227,7 +270,7 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     message: 'Server running',
-    version: '2.0.0',
+    version: '2.1.0',
     timestamp: new Date().toISOString()
   });
 });
@@ -237,6 +280,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/books', booksRoutes);
 app.use('/api/members', membersRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/librarians', librariansRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -276,5 +320,9 @@ app.listen(PORT, async () => {
   console.log('  GET    /api/members/:id');
   console.log('  PUT    /api/members/:id');
   console.log('  DELETE /api/members/:id');
+  console.log('  GET    /api/librarians (Admin only)');
+  console.log('  POST   /api/librarians (Admin only)');
+  console.log('  PUT    /api/librarians/:id (Admin only)');
+  console.log('  DELETE /api/librarians/:id (Admin only)');
   console.log('\n=================================\n');
 });
