@@ -3,9 +3,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
-import Books from './components/Books';
-import Members from './components/Members';
-import MainLayout from './components/MainLayout';
+import BooksList from './components/books/BooksList';
+import MembersList from './components/members/MembersList';
+import Navbar from './components/layout/Navbar';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import './App.css';
@@ -53,6 +53,8 @@ function App() {
   return (
     <Router>
       <div className="App">
+        {isAuthenticated && <Navbar user={user} onLogout={handleLogout} />}
+        
         <Routes>
           <Route 
             path="/login" 
@@ -74,9 +76,7 @@ function App() {
             path="/dashboard" 
             element={
               isAuthenticated ? 
-                <MainLayout user={user} onLogout={handleLogout}>
-                  <Dashboard user={user} onLogout={handleLogout} />
-                </MainLayout> : 
+                <Dashboard user={user} /> : 
                 <Navigate to="/login" />
             } 
           />
@@ -84,9 +84,7 @@ function App() {
             path="/books" 
             element={
               isAuthenticated ? 
-                <MainLayout user={user} onLogout={handleLogout}>
-                  <Books />
-                </MainLayout> : 
+                <BooksList /> : 
                 <Navigate to="/login" />
             } 
           />
@@ -94,13 +92,12 @@ function App() {
             path="/members" 
             element={
               isAuthenticated ? 
-                <MainLayout user={user} onLogout={handleLogout}>
-                  <Members />
-                </MainLayout> : 
+                <MembersList /> : 
                 <Navigate to="/login" />
             } 
           />
           <Route path="/" element={<Navigate to="/login" />} />
+          <Route path="*" element={<Navigate to="/dashboard" />} />
         </Routes>
       </div>
     </Router>

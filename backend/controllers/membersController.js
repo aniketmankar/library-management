@@ -1,5 +1,5 @@
 const pool = require('../config/database');
-const { validateMember, validateEmail, validatePhone } = require('../utils/validators');
+const { validateMember, validateEmail, validatePhone } = require('../utils/validator');
 
 // Generate unique member ID
 async function generateMemberId(connection) {
